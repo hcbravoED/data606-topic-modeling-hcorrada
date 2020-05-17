@@ -75,3 +75,18 @@ def simulate_data(num_words, num_docs, num_topics, num_words_per_doc):
     delta = simulate_delta(num_words_per_doc, p, theta)
     x = np.sum(delta, axis=2).reshape((num_words, num_docs))
     return x, delta, p, theta
+
+def _kl_divergence(p, q):
+    ii = np.nonzero(p)
+    kl = - np.log(q[ii] / p[ii] + 1e-12) * p[ii]
+    return np.sum(kl)
+
+def compare_topics(simulation_topics, estimated_topics):
+    _, num_topics = simulation_topics.shape
+    comp_mat = np.zeros((num_topics, num_topics))
+    for sim_topic in range(num_topics):
+        for est_topic in range(num_topics):
+            comp_mat[sim_topic, est_topic] = _kl_divergence(simulation_topics[:, sim_topic], estimated_topics[:, est_topic])
+
+    topic_assign = np.argmin(comp_mat, axis=0)
+    return topic_assign
