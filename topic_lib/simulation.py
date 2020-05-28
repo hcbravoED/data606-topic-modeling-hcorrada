@@ -20,7 +20,16 @@ def simulate_delta(num_words_per_doc, p, theta):
     
     # finish this loop to populate delta
     for d in range(num_docs):
-        pass
+        # generate the total number of word occurences in the document 
+        # allocated to each topic
+        nwt = np.random.multinomial(num_words_per_doc, p[:,d])
+        
+        # generate the number of word occurences for each word
+        # allocated to each topic
+        for t, n in np.ndenumerate(nwt):
+            # generate number of occurences for each word
+            draw = np.random.multinomial(n, theta[:, t[0]])
+            delta[:,d,t] = draw.reshape((num_words, 1))
     
     return delta
         
