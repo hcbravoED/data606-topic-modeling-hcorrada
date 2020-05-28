@@ -14,6 +14,13 @@ def init_params(num_words, num_docs, num_topics):
     # TODO: finish this function
     log_p = np.zeros((num_topics, num_docs))
     log_theta = np.zeros((num_words, num_topics))
+    
+    for d in range(num_docs):
+        log_p[:,d] = np.log(np.random.dirichlet(np.ones((num_topics))))
+        
+    for t in range(num_topics):
+        log_theta[:,t] = np.log(np.random.dirichlet(np.ones((num_words))))
+        
     return log_p, log_theta
 
 # compute topic probability for each word/doc
@@ -28,8 +35,9 @@ def init_params(num_words, num_docs, num_topics):
 def compute_topic_probs(topic_probs, x, log_p, log_theta):
     nz_words, nz_docs = x.nonzero()
     for w,d in zip(nz_words, nz_docs):
-        # TODO: finish this loop
-        pass
+        tmp = np.exp(log_p[:,d] + log_theta[w,:])
+        denom = np.sum(tmp)
+        topic_probs[w,d,:] = tmp / denom
 
 # reassign word occurrences across topics
 #
@@ -44,9 +52,9 @@ def compute_topic_probs(topic_probs, x, log_p, log_theta):
 #   NONE - overwrites delta parameter
 def reassign_words(delta, x, topic_probs):
     nz_words, nz_docs = x.nonzero()
-    for w, d in zip(nz_docs, nz_words):
-        # TODO: finish this loop
-        pass
+    for w, d in zip(nz_words, nz_docs):
+        new_draw = np.random.multinomial(x[w,d], topic_probs[w, d, :]) 
+        delta[w,d,:] = new_draw
 
 # resample topic distributions for each document
 # 
@@ -59,7 +67,8 @@ def reassign_words(delta, x, topic_probs):
 def resample_p(delta, alpha):
     _, num_docs, num_topics = delta.shape
     log_p = np.zeros((num_topics, num_docs))
-    # TODO: finish this function
+    for d in range(num_docs):
+        log_p[:,d] = np.log(np.random.dirichlet(np.sum(delta[:,d,:],axis=0) + alpha))
     return log_p
 
 # resample word distributions for each topic
@@ -73,9 +82,16 @@ def resample_p(delta, alpha):
 def resample_theta(delta, beta):
     num_words, _, num_topics = delta.shape
     log_theta = np.zeros((num_words, num_topics))
-    # TODO: finish this function
+    for t in range(num_topics):
+        log_theta[:,t] = np.log(np.random.dirichlet(np.sum(delta[:,:,t],axis=1) + beta))
     return log_theta
 
+def get_loglik(x, log_p, log_theta):
+    res = 0
+    nz_words, nz_docs = x.nonzero()
+    for w, d in zip(nz_words, nz_docs):
+        res += x[w, d] * np.log((np.sum(np.exp(log_p[:, d] + log_theta[w, :]))))
+    return res
 
 # Gibbs sampler for the LDA topic model
 #
@@ -100,6 +116,8 @@ def lda_gibbs(x, num_topics=8, num_rounds=200, burnin_fraction=.2, alpha=1., bet
     
     # initialize parameters
     log_p, log_theta = init_params(num_words, num_docs, num_topics)
+    assert(log_p.shape == (num_topics, num_docs))
+    assert(log_theta.shape == (num_words, num_topics))
     
     # matrix to store word/doc/topic probabilities
     topic_probs = np.zeros((num_words, num_docs, num_topics))
@@ -128,20 +146,28 @@ def lda_gibbs(x, num_topics=8, num_rounds=200, burnin_fraction=.2, alpha=1., bet
         log_p = resample_p(delta, alpha)
         
         # resample word distribution for each topic
-        log_theta = resample_theta(delta, alpha)
+        log_theta = resample_theta(delta, beta)
+        
+        assert(log_p.shape == (num_topics, num_docs))
+        assert(log_theta.shape == (num_words, num_topics))
         
         if verbose and i % 10 == 0:
-            print("Iteration {}".format(i))
+            print("Iteration {}, log_likelihood: {}".format(i, get_loglik(x, log_p, log_theta)))
         i += 1
         
     # done with samples, compute the mean word/doc/topic counts
     delta_hat = delta_sum / num_samples
     
     # compute final topic distributions for each document
-    # TODO: compute this from delta_hat
-    p_hat = np.zeros((num_topics, num_docs))
+    sum_over_words = np.sum(delta_hat, axis=0)
+    normalize_over_topics = np.sum(sum_over_words, axis=1)
+    p_hat = np.transpose(sum_over_words / normalize_over_topics[:,np.newaxis])
+    assert(p_hat.shape == (num_topics, num_docs))
     
     # compute final word distributions for each topic
-    # TODO: compute this from delta_hat
-    theta_hat = np.zeros((num_words, num_topics))
+    sum_over_documents = np.sum(delta_hat, axis=1)
+    normalize_over_words = np.sum(sum_over_documents, axis=0)
+    theta_hat = sum_over_documents / normalize_over_words
+    assert(theta_hat.shape == (num_words, num_topics))
+    
     return p_hat, theta_hat
