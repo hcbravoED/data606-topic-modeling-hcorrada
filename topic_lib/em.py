@@ -14,7 +14,14 @@ def init_params(num_words, num_docs, num_topics):
     log_p = np.zeros((num_topics, num_docs))
     log_theta = np.zeros((num_words, num_topics))
     
-    # TODO: complete this function
+    # intialize p
+    for d in range(num_docs):
+        log_p[:, d] = np.log(np.random.dirichlet(np.ones((num_topics))))
+    
+    # intialize theta
+    for t in range(num_topics):
+        log_theta[:,t] = np.log(np.random.dirichlet(np.ones((num_words))))
+        
     return log_p, log_theta
 
 # Perform the estep in the EM algorithm for pLSA
@@ -32,8 +39,9 @@ def init_params(num_words, num_docs, num_topics):
 def estep(gamma, x, log_p, log_theta):
     nz_words, nz_docs = x.nonzero()
     for w, d in zip(nz_words,nz_docs):
-        # TODO: complete this loop
-        pass
+        tmp = np.exp(log_p[:,d] + log_theta[w,:])
+        denom = np.sum(tmp)
+        gamma[w,d,:] = x[w,d] * tmp / denom
                     
 # Perform the M step of EM algorithm for pLSA
 #
@@ -48,11 +56,15 @@ def estep(gamma, x, log_p, log_theta):
 def mstep(x, gamma, pseudo_count=0.01):
     num_words, num_docs, num_topics = gamma.shape
     
-    # TODO: finish this function
-    log_p = np.zeros((num_topics, num_docs))
-    log_theta = np.zeros((num_words, num_topics))
+    res_p = np.transpose(np.sum(gamma, axis=0)) + pseudo_count
+    for d in range(num_docs):
+        res_p[:,d] = np.log(res_p[:,d]) - np.log(np.sum(res_p[:,d]))
+            
+    res_theta = np.sum(gamma, axis=1) + pseudo_count
+    for t in range(num_topics):
+        res_theta[:,t] = np.log(res_theta[:,t]) - np.log(np.sum(res_theta[:,t])) 
     
-    return log_p, log_theta
+    return res_p, res_theta
 
 # compute the log likelihood of given estimates
 # 
@@ -67,8 +79,7 @@ def get_loglik(x, log_p, log_theta):
     res = 0
     nz_words, nz_docs = x.nonzero()
     for w, d in zip(nz_words, nz_docs):
-        # TODO: finish this loop
-        pass
+        res += x[w, d] * np.log((np.sum(np.exp(log_p[:, d] + log_theta[w, :]))))
     return res
     
 # computes value of Q function at given estimates
@@ -101,8 +112,7 @@ def get_qopt(x, gamma, log_p, log_theta):
 #   - max_iter (int): maximum number of iterations
 #   - eps (float): tolerance for log likelihood improvement
 def check_convergence(cur_it, cur_llik, new_llik, max_iter, eps):
-    # TODO: Implement this function
-    return True
+    return cur_it >= max_iter or ((new_llik - cur_llik) < eps)
 
 # do one run of the EM algorithm for pLSA
 #
@@ -178,11 +188,16 @@ def plsa_em(x, num_restarts = 3, num_topics=8, max_iter=20, eps=1e-3, verbose=Fa
     best_theta = None
     best_llik = -np.inf
     
-    for _ in range(num_restarts):
+    for r in range(num_restarts):
+        if verbose:
+            print("Run {} of {}".format(r, num_restarts))
+            
         p, theta, llik = plsa_em_one_run(x, num_topics, max_iter, eps, verbose)
-        best_p, best_theta, best_llik = p, theta, llik
-        # TODO: complete what's next, keep the parameter estimates if this
-        #       run of EM is better
+        
+        if llik > best_llik:
+            best_p = p
+            best_theta = theta
+            best_llik = llik
     
     return best_p, best_theta, best_llik
             
